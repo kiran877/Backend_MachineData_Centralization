@@ -43,7 +43,44 @@ exports.createPLC = async (req, res) => {
             `);
         res.status(201).json({ message: 'PLC created successfully' });
     } catch (err) {
-        console.error('[DEBUG] createPLC error:', err);
+        res.status(500).send({ message: err.message });
+    }
+};
+
+exports.updatePLC = async (req, res) => {
+    const { id } = req.params;
+    const { plc_make, plc_model, plc_software_version, plc_firmware_version } = req.body;
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('id', sql.Int, id)
+            .input('plc_make', sql.NVarChar, plc_make)
+            .input('plc_model', sql.NVarChar, plc_model)
+            .input('plc_software_version', sql.NVarChar, plc_software_version)
+            .input('plc_firmware_version', sql.NVarChar, plc_firmware_version)
+            .query(`
+                UPDATE plcs 
+                SET plc_make = @plc_make, 
+                    plc_model = @plc_model, 
+                    plc_software_version = @plc_software_version, 
+                    plc_firmware_version = @plc_firmware_version
+                WHERE plc_id = @id
+            `);
+        res.json({ message: 'PLC updated successfully' });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
+
+exports.deletePLC = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM plcs WHERE plc_id = @id');
+        res.json({ message: 'PLC deleted successfully' });
+    } catch (err) {
         res.status(500).send({ message: err.message });
     }
 };
@@ -52,7 +89,7 @@ exports.createPLC = async (req, res) => {
 exports.getHMIs = async (req, res) => {
     const { machine_id } = req.query;
     try {
-        console.log('[DEBUG] getHMIs hit', machine_id ? `for machine_id: ${machine_id}` : '');
+        // console.log('[DEBUG] getHMIs hit', machine_id ? `for machine_id: ${machine_id}` : '');
         const dbPool = await poolPromise;
         const request = dbPool.request();
         let query = `
@@ -88,6 +125,42 @@ exports.createHMI = async (req, res) => {
                 VALUES (@machine_id, @hmi_make, @hmi_model, @hmi_ip)
             `);
         res.status(201).json({ message: 'HMI created successfully' });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
+
+exports.updateHMI = async (req, res) => {
+    const { id } = req.params;
+    const { hmi_make, hmi_model, hmi_ip } = req.body;
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('id', sql.Int, id)
+            .input('hmi_make', sql.NVarChar, hmi_make)
+            .input('hmi_model', sql.NVarChar, hmi_model)
+            .input('hmi_ip', sql.NVarChar, hmi_ip)
+            .query(`
+                UPDATE hmis 
+                SET hmi_make = @hmi_make, 
+                    hmi_model = @hmi_model, 
+                    hmi_ip = @hmi_ip
+                WHERE hmi_id = @id
+            `);
+        res.json({ message: 'HMI updated successfully' });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
+
+exports.deleteHMI = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM hmis WHERE hmi_id = @id');
+        res.json({ message: 'HMI deleted successfully' });
     } catch (err) {
         res.status(500).send({ message: err.message });
     }

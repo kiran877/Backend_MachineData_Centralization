@@ -6,7 +6,7 @@ exports.getMachines = async (req, res) => {
         const dbPool = await poolPromise;
         const request = dbPool.request();
         let query = `
-            SELECT m.*, l.line_name, a.area_name, p.plant_name 
+            SELECT m.*, l.line_name, a.area_name, p.plant_name
             FROM machines m
             JOIN lines l ON m.line_id = l.line_id
             JOIN areas a ON l.area_id = a.area_id
@@ -27,6 +27,13 @@ exports.getMachines = async (req, res) => {
             request.input('line_id', sql.Int, line_id);
         }
 
+        // Add machine_name search
+        const { machine_name } = req.query;
+        if (machine_name && machine_name !== 'undefined') {
+            query += ` AND m.machine_name LIKE @machine_name`;
+            request.input('machine_name', sql.NVarChar, `%${machine_name}%`);
+        }
+
         const result = await request.query(query);
         res.json(result.recordset);
     } catch (err) {
@@ -41,7 +48,7 @@ exports.getMachineById = async (req, res) => {
         const result = await dbPool.request()
             .input('id', sql.Int, id)
             .query(`
-                SELECT m.*, l.line_name, a.area_name, p.plant_name 
+                SELECT m.*, l.line_name, a.area_name, p.plant_name
                 FROM machines m
                 JOIN lines l ON m.line_id = l.line_id
                 JOIN areas a ON l.area_id = a.area_id
@@ -95,18 +102,22 @@ exports.createMachine = async (req, res) => {
 
 exports.updateMachine = async (req, res) => {
     const { id } = req.params;
-    const { machine_name, machine_type, automation_type, digitization_status } = req.body;
+    const { machine_name, machine_code, machine_type, automation_type, digitization_status } = req.body;
+    console.log('[DEBUG] updateMachine hit. ID:', id);
+    console.log('[DEBUG] req.user:', req.user);
     try {
         const dbPool = await poolPromise;
         await dbPool.request()
             .input('id', sql.Int, id)
             .input('machine_name', sql.NVarChar, machine_name)
+            .input('machine_code', sql.NVarChar, machine_code)
             .input('machine_type', sql.NVarChar, machine_type)
             .input('automation_type', sql.NVarChar, automation_type)
             .input('digitization_status', sql.NVarChar, digitization_status)
             .query(`
                 UPDATE machines 
                 SET machine_name = @machine_name, 
+                    machine_code = @machine_code,
                     machine_type = @machine_type, 
                     automation_type = @automation_type,
                     digitization_status = @digitization_status
@@ -120,14 +131,62 @@ exports.updateMachine = async (req, res) => {
 
 exports.deleteMachine = async (req, res) => {
     const { id } = req.params;
-    // Role Middleware already handles permission (Supervisor cannot delete)
     try {
         const dbPool = await poolPromise;
-        await dbPool.request()
-            .input('id', sql.Int, id)
-            .query('UPDATE machines SET is_active = 0 WHERE machine_id = @id');
-        res.json({ message: 'Machine deleted successfully' });
+        const transaction = new sql.Transaction(dbPool);
+
+        await transaction.begin();
+        const request = new sql.Request(transaction);
+        request.input('id', sql.Int, id);
+
+        // Cascade Delete Order:
+        // 1. Tag Alarms
+        // 2. PLC Tags
+        // 3. Machine Protocols
+        // 4. Process Parameters
+        // 5. Processes
+        // 6. PLCs
+        // 7. HMIs
+        // 8. Machines
+
+        // 1. Alarms (via Tags)
+        await request.query(`
+            DELETE tac FROM tag_alarm_configs tac
+            INNER JOIN plc_tags t ON tac.tag_id = t.tag_id
+            WHERE t.machine_id = @id
+        `);
+
+        // 2. Tags
+        await request.query('DELETE FROM plc_tags WHERE machine_id = @id');
+
+        // 3. Protocols
+        await request.query('DELETE FROM machine_protocols WHERE machine_id = @id');
+
+        // 4. Parameters (via Processes)
+        await request.query(`
+            DELETE pp FROM process_parameters pp
+            INNER JOIN processes p ON pp.process_id = p.process_id
+            WHERE p.machine_id = @id
+        `);
+
+        // 5. Processes
+        await request.query('DELETE FROM processes WHERE machine_id = @id');
+
+        // 6. PLCs
+        await request.query('DELETE FROM plcs WHERE machine_id = @id');
+
+        // 7. HMIs
+        await request.query('DELETE FROM hmis WHERE machine_id = @id');
+
+        // 8. Machine
+        await request.query('DELETE FROM machines WHERE machine_id = @id');
+
+        await transaction.commit();
+        res.json({ message: 'Machine and all associated data deleted successfully' });
     } catch (err) {
-        res.status(500).send({ message: err.message });
+        console.error('Delete Machine Error:', err);
+        // If transaction fails, it rolls back automatically if not committed? 
+        // Better to be explicit if possible, but Transaction object handles typical errors.
+        res.status(500).send({ message: 'Failed to delete machine: ' + err.message });
     }
 };

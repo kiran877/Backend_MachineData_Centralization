@@ -1,4 +1,4 @@
-const { poolPromise } = require('./config/db');
+const { poolPromise } = require('../config/db');
 
 async function debug() {
     try {

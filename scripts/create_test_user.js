@@ -1,4 +1,4 @@
-const { sql, poolPromise } = require('./config/db');
+const { sql, poolPromise } = require('../config/db');
 const bcrypt = require('bcryptjs');
 
 async function createTestUser() {

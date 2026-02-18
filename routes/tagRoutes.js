@@ -7,6 +7,8 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 // Tags
 router.get('/', authMiddleware, roleMiddleware('User'), tagController.getTags);
 router.post('/', authMiddleware, roleMiddleware('Supervisor'), tagController.createTag);
+router.put('/:id', authMiddleware, roleMiddleware('Supervisor'), tagController.updateTag);
+router.delete('/:id', authMiddleware, roleMiddleware('Supervisor'), tagController.deleteTag);
 
 // Alarms
 router.get('/alarms', authMiddleware, roleMiddleware('User'), tagController.getAlarmConfigs);

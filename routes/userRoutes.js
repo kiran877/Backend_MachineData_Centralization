@@ -6,6 +6,8 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 
 router.get('/', authMiddleware, roleMiddleware('Admin'), userController.getUsers);
 router.post('/register', authMiddleware, roleMiddleware('Admin'), userController.registerUser);
+router.delete('/:id', authMiddleware, roleMiddleware('Admin'), userController.deleteUser);
+router.put('/:id', authMiddleware, roleMiddleware('Admin'), userController.updateUser);
 
 // Lookup routes for form filling
 router.get('/roles', authMiddleware, userController.getRoles);

@@ -42,6 +42,7 @@ exports.createProcess = async (req, res) => {
                 VALUES (@machine_id, @process_name, @part_name, @cycle_time_seconds)
             `);
 
+
         // Fetch newly created process_id
         const idResult = await dbPool.request()
             .input('machine_id', sql.Int, machine_id)
@@ -58,6 +59,50 @@ exports.createProcess = async (req, res) => {
         res.status(201).json({ message: 'Process created successfully', process_id });
     } catch (err) {
         console.error('[DEBUG] createProcess error:', err);
+        res.status(500).send({ message: err.message });
+    }
+};
+// Update Process
+exports.updateProcess = async (req, res) => {
+    const { id } = req.params;
+    const { process_name, part_name, cycle_time_seconds } = req.body;
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('id', sql.Int, id)
+            .input('process_name', sql.NVarChar, process_name)
+            .input('part_name', sql.NVarChar, part_name)
+            .input('cycle_time_seconds', sql.Int, cycle_time_seconds)
+            .query(`
+                UPDATE processes 
+                SET process_name = @process_name, part_name = @part_name, cycle_time_seconds = @cycle_time_seconds 
+                WHERE process_id = @id
+            `);
+        res.json({ message: 'Process updated successfully' });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
+
+// Delete Process (and its parameters)
+exports.deleteProcess = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const dbPool = await poolPromise;
+        const transaction = new sql.Transaction(dbPool);
+
+        await transaction.begin();
+        const request = new sql.Request(transaction);
+        request.input('id', sql.Int, id);
+
+        // Delete parameters first (Manual Cascade)
+        await request.query('DELETE FROM process_parameters WHERE process_id = @id');
+        // Delete process
+        await request.query('DELETE FROM processes WHERE process_id = @id');
+
+        await transaction.commit();
+        res.json({ message: 'Process and associated parameters deleted successfully' });
+    } catch (err) {
         res.status(500).send({ message: err.message });
     }
 };
@@ -105,6 +150,47 @@ exports.createParameter = async (req, res) => {
         res.status(201).json({ message: 'Process parameter created successfully' });
     } catch (err) {
         console.error('[DEBUG] createParameter error:', err);
+        res.status(500).send({ message: err.message });
+    }
+};
+
+// Update Parameter
+exports.updateParameter = async (req, res) => {
+    const { id } = req.params;
+    const { parameter_name, unit, control_limit_min, control_limit_max, set_point, alarm_enabled } = req.body;
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('id', sql.Int, id)
+            .input('parameter_name', sql.NVarChar, parameter_name)
+            .input('unit', sql.NVarChar, unit)
+            .input('control_limit_min', sql.Float, control_limit_min)
+            .input('control_limit_max', sql.Float, control_limit_max)
+            .input('set_point', sql.Float, set_point)
+            .input('alarm_enabled', sql.Bit, alarm_enabled)
+            .query(`
+                UPDATE process_parameters 
+                SET parameter_name = @parameter_name, unit = @unit, 
+                    control_limit_min = @control_limit_min, control_limit_max = @control_limit_max, 
+                    set_point = @set_point, alarm_enabled = @alarm_enabled
+                WHERE parameter_id = @id
+            `);
+        res.json({ message: 'Parameter updated successfully' });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
+
+// Delete Parameter
+exports.deleteParameter = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM process_parameters WHERE parameter_id = @id');
+        res.json({ message: 'Parameter deleted successfully' });
+    } catch (err) {
         res.status(500).send({ message: err.message });
     }
 };

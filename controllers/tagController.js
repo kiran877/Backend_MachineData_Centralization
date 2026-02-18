@@ -80,6 +80,69 @@ exports.createTag = async (req, res) => {
     }
 };
 
+exports.updateTag = async (req, res) => {
+    const { id } = req.params;
+    const {
+        tag_name, tag_path, description, data_type, io_type,
+        plc_address, engineering_unit, raw_min, raw_max, eng_min, eng_max,
+        deadband, history_enabled, security_level
+    } = req.body;
+
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('id', sql.Int, id)
+            .input('tag_name', sql.NVarChar, tag_name)
+            .input('tag_path', sql.NVarChar, tag_path)
+            .input('description', sql.NVarChar, description)
+            .input('data_type', sql.NVarChar, data_type)
+            .input('io_type', sql.NVarChar, io_type)
+            .input('plc_address', sql.NVarChar, plc_address)
+            .input('engineering_unit', sql.NVarChar, engineering_unit)
+            .input('raw_min', sql.Float, raw_min)
+            .input('raw_max', sql.Float, raw_max)
+            .input('eng_min', sql.Float, eng_min)
+            .input('eng_max', sql.Float, eng_max)
+            .input('deadband', sql.Float, deadband)
+            .input('history_enabled', sql.Bit, history_enabled ? 1 : 0)
+            .input('security_level', sql.NVarChar, security_level)
+            .query(`
+                UPDATE plc_tags SET 
+                    tag_name = @tag_name, tag_path = @tag_path, description = @description, 
+                    data_type = @data_type, io_type = @io_type, plc_address = @plc_address, 
+                    engineering_unit = @engineering_unit, raw_min = @raw_min, raw_max = @raw_max, 
+                    eng_min = @eng_min, eng_max = @eng_max, deadband = @deadband, 
+                    history_enabled = @history_enabled, security_level = @security_level
+                WHERE tag_id = @id
+            `);
+        res.json({ message: 'Tag updated successfully' });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
+
+exports.deleteTag = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const dbPool = await poolPromise;
+        const transaction = new sql.Transaction(dbPool);
+
+        await transaction.begin();
+        const request = new sql.Request(transaction);
+        request.input('id', sql.Int, id);
+
+        // Delete alarms first
+        await request.query('DELETE FROM tag_alarm_configs WHERE tag_id = @id');
+        // Delete tag
+        await request.query('DELETE FROM plc_tags WHERE tag_id = @id');
+
+        await transaction.commit();
+        res.json({ message: 'Tag and associated alarms deleted successfully' });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
+
 // --- ALARM CONFIGS ---
 exports.getAlarmConfigs = async (req, res) => {
     const { tag_id, machine_id } = req.query;

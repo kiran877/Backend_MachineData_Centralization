@@ -74,3 +74,16 @@ exports.linkMachineProtocol = async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 };
+exports.unlinkMachineProtocol = async (req, res) => {
+    const { machine_id, protocol_id } = req.params;
+    try {
+        const dbPool = await poolPromise;
+        await dbPool.request()
+            .input('machine_id', sql.Int, machine_id)
+            .input('protocol_id', sql.Int, protocol_id)
+            .query('DELETE FROM machine_protocols WHERE machine_id = @machine_id AND protocol_id = @protocol_id');
+        res.json({ message: 'Protocol unlinked successfully' });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
