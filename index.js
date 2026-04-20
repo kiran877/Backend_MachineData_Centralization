@@ -41,7 +41,7 @@ app.listen(PORT, async () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     try {
         await poolPromise;
-        console.log('✅ Database connection verified on startup.');
+        console.log('✅ Database connection verified on startup');
     } catch (err) {
         console.error('❌ Database connection error on startup:', err);
     }
